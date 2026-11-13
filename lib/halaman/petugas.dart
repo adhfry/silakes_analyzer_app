@@ -513,6 +513,10 @@ class HalamanDetail extends StatelessWidget {
                       ),
                     ]),
                   ),
+                  if (ditinjau && d['petunjuk'] != null) ...[
+                    const SizedBox(height: 12),
+                    _KartuPetunjuk(d),
+                  ],
                   const SizedBox(height: 12),
                   Kartu(child: _TabelPanel((d['panel'] as List).cast<Json>())),
                   const SizedBox(height: 12),
@@ -548,6 +552,54 @@ class HalamanDetail extends StatelessWidget {
           },
         ),
       ),
+    );
+  }
+}
+
+/// Petunjuk peninjauan untuk profil yang ditandai: pola yang dicurigai (dari nilai SHAP dan median profil normal,
+/// dihitung layanan), alasannya, dan hal yang perlu diperiksa petugas beserta keputusan tindak lanjut yang sesuai.
+class _KartuPetunjuk extends StatelessWidget {
+  const _KartuPetunjuk(this.d);
+  final Json d;
+
+  @override
+  Widget build(BuildContext context) {
+    final pt = d['petunjuk'] as Json;
+    final median = (d['median_profil_normal'] as Json?) ?? const {};
+    final nilai = {for (final b in (d['panel'] as List).cast<Json>()) b['parameter'] as String: b['nilai'] as num};
+    final rendah = (pt['parameter_rendah'] as List).cast<String>().where(median.containsKey).take(3).toList();
+    final pengenceran = pt['pola'] == 'pengenceran';
+    final daftar = rendah
+        .map((n) => '${fmt.labelDalamKalimat(n)} ${fmt.nilaiHasil(nilai[n]!)} '
+            '(median ${fmt.nilaiHasil(median[n] as num)})')
+        .join(', ');
+    final judul = pengenceran ? 'Pola menyerupai sampel terencerkan' : 'Pola menyerupai sampel tertukar';
+    final alasan = pengenceran
+        ? 'Dorongan terbesar ke arah anomali berasal dari kadar yang lebih rendah daripada median profil normal: '
+            '$daftar.'
+        : 'Dorongan ke arah anomali tidak berasal dari kadar yang turun bersamaan, sehingga kombinasi nilai panel '
+            'lebih mungkin kurang lazim untuk jenis kelamin dan umur pasien.';
+    final periksa = pengenceran
+        ? 'Periksa kemungkinan sampel tercampur cairan, misalnya diambil dekat jalur infus. Bila kadar rendah '
+            'sesuai kondisi pasien, pilih Hasil sesuai. Bila diragukan, pilih Pemeriksaan ulang.'
+        : 'Periksa kesesuaian identitas pasien dengan label sampel. Bila tidak sesuai, pilih Verifikasi identitas '
+            'dan spesimen. Bila sesuai, pilih Hasil sesuai.';
+    return Kartu(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const JudulKartu('Petunjuk Peninjauan', ikon: Icons.fact_check_outlined),
+        const SizedBox(height: 6),
+        Text(judul, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Warna.ditinjauTeks)),
+        const SizedBox(height: 4),
+        Text(alasan, style: const TextStyle(fontSize: 13)),
+        const SizedBox(height: 10),
+        const Text('Yang perlu diperiksa',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Warna.brand900)),
+        const SizedBox(height: 2),
+        Text(periksa, style: const TextStyle(fontSize: 13)),
+        const SizedBox(height: 8),
+        const Text('Petunjuk dihitung dari nilai SHAP profil ini dan median 6.872 profil normal data penelitian.',
+            style: TextStyle(fontSize: 12, color: Warna.bodyLemah)),
+      ]),
     );
   }
 }
@@ -626,14 +678,35 @@ class HalamanShap extends StatelessWidget {
     final positif = kontribusi.where((k) => (k['nilai_shap'] as num) > 0).toList();
     final ditinjau = detail['status_deteksi'] == 'perlu_ditinjau';
 
+    final median = (detail['median_profil_normal'] as Json?) ?? const {};
+    final petunjuk = detail['petunjuk'] as Json?;
+
+    /// Keterangan di bawah nama fitur: nilai pasien dibanding median profil normal, agar arah SHAP dapat dibaca
+    /// tanpa mengira nilai positif berarti hasil tinggi.
+    String keterangan(Json k) {
+      final n = k['nama_fitur'] as String;
+      final v = k['nilai_fitur'] as num;
+      if (n == 'jenis_kelamin') return v >= 0.5 ? 'Laki-laki' : 'Perempuan';
+      if (n == 'umur') return '${v.round()} tahun';
+      final m = median[n] as num?;
+      return m == null ? fmt.nilaiHasil(v) : '${fmt.nilaiHasil(v)} · median ${fmt.nilaiHasil(m)}';
+    }
+
     String kesimpulan() {
       if (positif.isEmpty) {
         return 'Tidak ada fitur yang mendorong prediksi ke arah anomali pada profil ini.';
       }
       final utama = fmt.labelFitur[positif.first['nama_fitur']]!;
       final ikut = positif.skip(1).take(2).map((k) => fmt.labelDalamKalimat(k['nama_fitur'] as String)).toList();
-      return '$utama memberi kontribusi terbesar terhadap prediksi anomali pada profil ini'
+      final dasar = '$utama memberi kontribusi terbesar terhadap prediksi anomali pada profil ini'
           '${ikut.isEmpty ? '' : ', diikuti ${ikut.join(' dan ')}'}.';
+      if (!ditinjau || petunjuk == null) return dasar;
+      if (petunjuk['pola'] == 'pengenceran') {
+        final rendah = (petunjuk['parameter_rendah'] as List).cast<String>().take(3).map(fmt.labelDalamKalimat).toList();
+        return '$dasar Kadar ${rendah.join(', ')} lebih rendah daripada median profil normal, sehingga pola profil '
+            'menyerupai sampel terencerkan. Kadar rendah belum tentu salah; bandingkan dengan kondisi pasien.';
+      }
+      return '$dasar Kadar panel tidak turun bersamaan, sehingga pola profil lebih menyerupai sampel tertukar.';
     }
 
     return Scaffold(
@@ -654,10 +727,12 @@ class HalamanShap extends StatelessWidget {
               Kartu(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   const JudulKartu('Kontribusi Fitur (Nilai SHAP)', ikon: Icons.bar_chart),
-                  const Text('Delapan fitur model', style: TextStyle(fontSize: 13, color: Warna.bodyLemah)),
+                  const Text('Delapan fitur model; di bawah nama fitur: nilai pasien dan median profil normal',
+                      style: TextStyle(fontSize: 13, color: Warna.bodyLemah)),
                   const SizedBox(height: 10),
                   for (final k in kontribusi)
-                    _BarisShap(fmt.labelFitur[k['nama_fitur']]!, (k['nilai_shap'] as num).toDouble(), maks),
+                    _BarisShap(fmt.labelFitur[k['nama_fitur']]!, (k['nilai_shap'] as num).toDouble(), maks,
+                        keterangan: keterangan(k)),
                   const SizedBox(height: 6),
                   const Text('←  tidak ada indikasi          anomali  →',
                       textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Warna.bodyLemah)),
@@ -668,11 +743,16 @@ class HalamanShap extends StatelessWidget {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   const JudulKartu('Penjumlahan Nilai SHAP', ikon: Icons.functions),
                   const SizedBox(height: 6),
-                  BarisNilai('Nilai dasar model (φ₀)', dasar == null ? '-' : fmt.angka(dasar, 3)),
-                  BarisNilai('Jumlah kontribusi fitur (Σφⱼ)', '${jumlah >= 0 ? '+' : ''}${fmt.angka(jumlah, 3)}'),
-                  BarisNilai('Keluaran model f(x) = φ₀ + Σφⱼ', keluaran == null ? '-' : fmt.angka(keluaran, 3)),
+                  // empat desimal sama dengan presisi nilai SHAP yang tersimpan, sehingga φ₀ + Σφⱼ yang tampil sama
+                  // dengan f(x) yang tampil (tiga desimal sempat menampilkan −0,005 + 1,005 = 1,001)
+                  BarisNilai('Nilai dasar model (φ₀)', dasar == null ? '-' : fmt.angka(dasar, 4)),
+                  BarisNilai('Jumlah kontribusi fitur (Σφⱼ)', '${jumlah >= 0 ? '+' : ''}${fmt.angka(jumlah, 4)}'),
+                  BarisNilai('Keluaran model f(x) = φ₀ + Σφⱼ', keluaran == null ? '-' : fmt.angka(keluaran, 4)),
                   BarisNilai('Peluang anomali = 1 / (1 + e^(−f(x)))', fmt.peluang(detail['peluang_anomali'] as num),
                       tebal: true),
+                  const SizedBox(height: 4),
+                  const Text('Nilai per fitur pada grafik dibulatkan dua desimal; penjumlahan memakai nilai empat desimal.',
+                      style: TextStyle(fontSize: 12, color: Warna.bodyLemah)),
                 ]),
               ),
               const SizedBox(height: 12),
@@ -686,10 +766,11 @@ class HalamanShap extends StatelessWidget {
 }
 
 class _BarisShap extends StatelessWidget {
-  const _BarisShap(this.label, this.shap, this.maks);
+  const _BarisShap(this.label, this.shap, this.maks, {this.keterangan});
   final String label;
   final double shap;
   final double maks;
+  final String? keterangan;
 
   @override
   Widget build(BuildContext context) {
@@ -703,7 +784,14 @@ class _BarisShap extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(children: [
-        SizedBox(width: 104, child: Text(label, style: const TextStyle(fontSize: 13))),
+        SizedBox(
+          width: 104,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label, style: const TextStyle(fontSize: 13)),
+            if (keterangan != null)
+              Text(keterangan!, style: const TextStyle(fontSize: 11, color: Warna.bodyLemah, fontFeatures: angkaTabular)),
+          ]),
+        ),
         Expanded(child: positif ? const SizedBox(height: 14) : batang),
         Container(width: 1.5, height: 20, color: Warna.body),
         Expanded(child: positif ? batang : const SizedBox(height: 14)),
