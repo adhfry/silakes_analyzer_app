@@ -1,0 +1,40 @@
+name: silakes_analyzer
+description: "SiLAKES Analyzer: peninjauan hasil deteksi kesalahan pra-analitik untuk petugas laboratorium."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  flutter_secure_storage: ^11.2.0
+  http: ^1.6.0
+  intl: ^0.20.3
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_driver:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/logo.png
+  fonts:
+    - family: PublicSans
+      fonts:
+        - asset: assets/fonts/PublicSans-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/PublicSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/PublicSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/PublicSans-Bold.ttf
+          weight: 700
