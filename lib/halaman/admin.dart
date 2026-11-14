@@ -323,7 +323,7 @@ class _FormPenggunaState extends State<FormPengguna> {
   late String _peran = (widget.pengguna?['peran'] as String?) ?? 'petugas';
   bool _proses = false;
   bool _tampilSandi = false;
-  // setelah percobaan simpan pertama, pesan galat diperbarui setiap kali isian diubah
+  // Setelah percobaan simpan pertama, pesan galat diperbarui setiap kali isian diubah.
   bool _sudahDicoba = false;
 
   bool get _baru => widget.pengguna == null;

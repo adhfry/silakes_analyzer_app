@@ -556,8 +556,7 @@ class HalamanDetail extends StatelessWidget {
   }
 }
 
-/// Petunjuk peninjauan untuk profil yang ditandai: pola yang dicurigai (dari nilai SHAP dan median profil normal,
-/// dihitung layanan), alasannya, dan hal yang perlu diperiksa petugas beserta keputusan tindak lanjut yang sesuai.
+/// Pola yang dicurigai (dihitung layanan), alasannya, dan hal yang perlu diperiksa petugas.
 class _KartuPetunjuk extends StatelessWidget {
   const _KartuPetunjuk(this.d);
   final Json d;
@@ -681,8 +680,7 @@ class HalamanShap extends StatelessWidget {
     final median = (detail['median_profil_normal'] as Json?) ?? const {};
     final petunjuk = detail['petunjuk'] as Json?;
 
-    /// Keterangan di bawah nama fitur: nilai pasien dibanding median profil normal, agar arah SHAP dapat dibaca
-    /// tanpa mengira nilai positif berarti hasil tinggi.
+    /// Nilai pasien dan median profil normal, agar SHAP positif tidak dibaca sebagai hasil tinggi.
     String keterangan(Json k) {
       final n = k['nama_fitur'] as String;
       final v = k['nilai_fitur'] as num;
@@ -743,8 +741,7 @@ class HalamanShap extends StatelessWidget {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   const JudulKartu('Penjumlahan Nilai SHAP', ikon: Icons.functions),
                   const SizedBox(height: 6),
-                  // empat desimal sama dengan presisi nilai SHAP yang tersimpan, sehingga φ₀ + Σφⱼ yang tampil sama
-                  // dengan f(x) yang tampil (tiga desimal sempat menampilkan −0,005 + 1,005 = 1,001)
+                  // Empat desimal sesuai presisi SHAP tersimpan, agar φ₀ + Σφⱼ yang tampil sama dengan f(x).
                   BarisNilai('Nilai dasar model (φ₀)', dasar == null ? '-' : fmt.angka(dasar, 4)),
                   BarisNilai('Jumlah kontribusi fitur (Σφⱼ)', '${jumlah >= 0 ? '+' : ''}${fmt.angka(jumlah, 4)}'),
                   BarisNilai('Keluaran model f(x) = φ₀ + Σφⱼ', keluaran == null ? '-' : fmt.angka(keluaran, 4)),

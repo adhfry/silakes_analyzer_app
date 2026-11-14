@@ -20,7 +20,7 @@ class _HalamanMasukState extends State<HalamanMasuk> {
   final _sandi = TextEditingController();
   bool _proses = false;
   bool _tampilSandi = false;
-  // setelah percobaan simpan pertama, pesan galat diperbarui setiap kali isian diubah
+  // Setelah percobaan masuk pertama, pesan galat diperbarui setiap kali isian diubah.
   bool _sudahDicoba = false;
   String? _galat;
 
